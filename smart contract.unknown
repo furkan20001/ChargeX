@@ -1,0 +1,71 @@
+use solana_program::{
+    account_info::{next_account_info, AccountInfo},
+    entrypoint,
+    entrypoint::ProgramResult,
+    program_error::ProgramError,
+    pubkey::Pubkey,
+};
+
+entrypoint!(process_instruction);
+
+fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    let accounts_iter = &mut accounts.iter();
+
+    let from_account = next_account_info(accounts_iter)?;
+    let to_account = next_account_info(accounts_iter)?;
+
+    let amount = u64::from_le_bytes(
+        instruction_data
+            .get(..8)
+            .ok_or(ProgramError::InvalidInstructionData)?
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?,
+    );
+
+    let from_balance = **from_account.try_borrow_lamports()? as u64;
+    if from_balance < amount {
+        return Err(ProgramError::InsufficientFunds);
+    }
+
+    **from_account.try_borrow_mut_lamports()? -= amount;
+    **to_account.try_borrow_mut_lamports()? += amount;
+
+    Ok(())
+}
+const solanaWeb3 = require('@solana/web3.js');
+
+// Solana ağına bağlanma
+const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+
+// Program ID ve cüzdan bilgileri
+const programId = new solanaWeb3.PublicKey('YourProgramId');
+const fromAccount = new solanaWeb3.PublicKey('YourFromAccountPublicKey');
+const toAccount = new solanaWeb3.PublicKey('YourToAccountPublicKey');
+
+// Cüzdanın özel anahtarı (güvenli bir şekilde saklanmalıdır)
+const secretKey = Uint8Array.from([/* Your secret key here */]);
+const fromWallet = solanaWeb3.Keypair.fromSecretKey(secretKey);
+
+// Programı çalıştırma (Token transferi)
+async function transferTokens(amount) {
+    const transaction = new solanaWeb3.Transaction().add(
+        new solanaWeb3.TransactionInstruction({
+            keys: [
+                { pubkey: fromAccount, isSigner: true, isWritable: true },
+                { pubkey: toAccount, isSigner: false, isWritable: true }
+            ],
+            programId,
+            data: Buffer.from(Uint8Array.of(...new solanaWeb3.BN(amount).toArray("le", 8)))
+        })
+    );
+
+    const signature = await solanaWeb3.sendAndConfirmTransaction(connection, transaction, [fromWallet]);
+    console.log('Transaction Signature:', signature);
+}
+
+// Kullanıcı işlem yapmak istediğinde bu fonksiyonu çağırabilirsiniz
+transferTokens(1000000); // 1 SOL'a eşdeğer küçük birim
